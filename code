@@ -1,0 +1,117 @@
+'button to trigger function
+Private Sub CommandButton1_Click()
+    'fill data to forecast
+    Dim inputData(0 To 13) As Variant
+    inputData(0) = 120
+    inputData(1) = 113
+    inputData(2) = 110
+    inputData(3) = 109
+    inputData(4) = 125
+    inputData(5) = 147
+    inputData(6) = 170
+    inputData(7) = 130
+    inputData(8) = 123
+    inputData(9) = 120
+    inputData(10) = 119
+    inputData(11) = 131
+    inputData(12) = 141
+    inputData(13) = 179
+    
+    HoltForecast (inputData)
+End Sub
+
+'Function will write values down in current sheet from A1
+Function HoltForecast(data)
+    'forecast always 7 days
+    
+    Dim TotalLength, BasicLength As Integer
+    Dim Lt(), Tt(), St(), Ft(), Et() As Double
+    Dim RMSE As Double
+
+    BasicLength = UBound(data, 1)
+    TotalLength = BasicLength + 7
+
+    ReDim Lt(BasicLength)
+    ReDim Tt(BasicLength)
+    ReDim St(BasicLength)
+    ReDim Ft(TotalLength)
+    ReDim Et(BasicLength)
+
+    Dim a_min, b_min, c_min As Double
+    Dim RMSE_min As Double
+    'sum
+    Dim suma As Double
+    
+    suma = data(0) + data(1) + data(2) + data(3) + data(4) + data(5) + data(6)
+    suma = suma / 7
+    
+    For i = 0 To 6
+        St(i) = data(i) / suma
+    Next i
+    'find optimal value for alfa, beta, gamma
+    For a_war = 0 To 1 Step 0.05
+        For b_war = 0 To 1 Step 0.05
+            For c_war = 0 To 1 Step 0.05
+                RMSE = 0
+                For i = 7 To BasicLength
+                    If i = 7 Then
+                        Lt(i) = data(i) / St(i - 7)
+                        Tt(i) = (data(i) / St(i - 7)) - (data(i - 1) / St(i - 1))
+                        St(i) = c_war * (data(i) / Lt(i)) + (1 - c_war) * St(i - 7)
+                    End If
+                    If i > 7 And i <= BasicLength Then
+                        Lt(i) = a_war * (data(i) / St(i - 7)) + (1 - a_war) * (Lt(i - 1) + Tt(i - 1))
+                        Tt(i) = b_war * (Lt(i) - Lt(i - 1)) + (1 - b_war) * Tt(i - 1)
+                        St(i) = c_war * (data(i) / Lt(i)) + (1 - c_war) * (St(i - 7))
+                        Ft(i) = (Lt(i - 1) + Tt(i - 1)) * St(i - 7)
+                        Et(i) = data(i) - Ft(i)
+                        RMSE = RMSE + (Et(i) * Et(i))
+                    End If
+                    
+                Next i
+                If RMSE_min = 0 Or RMSE < RMSE_min Then
+                    RMSE_min = RMSE
+                    a_min = a_war
+                    b_min = b_war
+                    c_min = c_war
+                End If
+            Next c_war
+        Next b_war
+    Next a_war
+    
+    'now forecast
+    For i = 0 To TotalLength
+        'od 0 do 7 uzupelnienie danych o sezonowosci
+        
+        If i >= 0 And i <= 6 Then
+            St(i) = data(i) / suma
+            
+        End If
+        If i = 7 Then
+            Lt(i) = data(i) / St(i - 7)
+            Tt(i) = (data(i) / St(i - 7)) - (data(i - 1) / St(i - 1))
+            St(i) = c_min * (data(i) / Lt(i)) + (1 - c_min) * St(i - 7)
+        End If
+        If i > 7 And i <= BasicLength Then
+            Lt(i) = a_min * (data(i) / St(i - 7)) + (1 - a_min) * (Lt(i - 1) + Tt(i - 1))
+            Tt(i) = b_min * (Lt(i) - Lt(i - 1)) + (1 - b_min) * Tt(i - 1)
+            St(i) = c_min * (data(i) / Lt(i)) + (1 - c_min) * (St(i - 7))
+            
+            Ft(i) = (Lt(i - 1) + Tt(i - 1)) * St(i - 7)
+        End If
+        If i > BasicLength Then
+            Ft(i) = (Lt(BasicLength) + (i - BasicLength) * Tt(BasicLength)) * St(i - 7)
+        End If
+        
+    Next i
+    
+    'write down data in sheet
+    For i = 0 To BasicLength
+        Range("A1").Offset(i, 0).Value = data(i)
+    Next i
+    
+    For i = 0 To TotalLength
+        Range("B1").Offset(i, 0).Value = Ft(i)
+    Next i
+    
+End Function
